@@ -1,0 +1,5 @@
+package absinterp
+
+opts = "-p contrib -p pruviloj"
+
+modules = Main
