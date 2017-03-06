@@ -1,4 +1,4 @@
-package absinterp
+package absint
 
 opts = "-p contrib -p pruviloj"
 
