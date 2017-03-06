@@ -1,75 +1,102 @@
 module Main
 
-IdempotencyProof : (X : Type) -> (X -> X -> X) -> Type
-IdempotencyProof X f = (a : X) -> f a a = a
+import Pruviloj
 
-AssociativityProof : (X : Type) -> (X -> X -> X) -> Type
-AssociativityProof X f = (a : X) ->
-                         (b : X) ->
-                         (c : X) ->
-                         f a (f b c) = f (f a b) c
+infixl 9 .>
+(.>) : (a -> b) -> (b -> c) -> (a -> c)
+(.>) f g = \x => g (f x)
 
-CommutativityProof : (X : Type) -> (X -> X -> X) -> Type
-CommutativityProof X f = (a : X) ->
-                         (b : X) ->
-                         f a b = f b a
+IdempotencyProof : {X : Type} -> (X -> X -> X) -> Type
+IdempotencyProof {X} f = (a : X) -> f a a = a
 
-LeftUnitalityProof : (X : Type) -> (X -> X -> X) -> X -> Type
-LeftUnitalityProof X f e = (a : X) -> a = f e a
+AssociativityProof : {X : Type} -> (X -> X -> X) -> Type
+AssociativityProof {X} f = (a : X) ->
+                           (b : X) ->
+                           (c : X) ->
+                           f a (f b c) = f (f a b) c
 
-RightUnitalityProof : (X : Type) -> (X -> X -> X) -> X -> Type
-RightUnitalityProof X f e = (a : X) -> a = f a e
+CommutativityProof : {X : Type} -> (X -> X -> X) -> Type
+CommutativityProof {X} f = (a : X) ->
+                           (b : X) ->
+                           f a b = f b a
 
-UnitalityProof : (X : Type) -> (X -> X -> X) -> X -> Type
-UnitalityProof X f e = (LeftUnitalityProof X f e, RightUnitalityProof X f e)
+LeftUnitalityProof : {X : Type} -> (X -> X -> X) -> X -> Type
+LeftUnitalityProof {X} f e = (a : X) -> a = f e a
+
+RightUnitalityProof : {X : Type} -> (X -> X -> X) -> X -> Type
+RightUnitalityProof {X} f e = (a : X) -> a = f a e
+
+UnitalityProof : {X : Type} -> (X -> X -> X) -> X -> Type
+UnitalityProof {X} f e = (a : X) -> (a = f e a, a = f a e)
 
 record Dual (X : Type) where
   constructor MkDual
   fromDual : X
-  
-implementation (Eq x) => Eq (Dual x) where {
 
+implementation (Eq x) => Eq (Dual x) where {
+  (MkDual x) == (MkDual y) = (x == y)
 }
+
+dualInj : (x = y) -> (MkDual x = MkDual y)
+dualInj Refl = Refl
 
 interface (Eq X) => MeetSemiLattice (X : Type)
           where {
             meet : X -> X -> X
-            meetIsIdempotent  : IdempotencyProof   X meet
-            meetIsAssociative : AssociativityProof X meet
-            meetIsCommutative : CommutativityProof X meet
+            meetIsIdempotent  : IdempotencyProof   meet
+            meetIsAssociative : AssociativityProof meet
+            meetIsCommutative : CommutativityProof meet
           }
 
 interface (Eq X) => JoinSemiLattice (X : Type)
           where {
             join : X -> X -> X
-            joinIsIdempotent  : IdempotencyProof   X join
-            joinIsAssociative : AssociativityProof X join
-            joinIsCommutative : CommutativityProof X join
+            joinIsIdempotent  : IdempotencyProof   join
+            joinIsAssociative : AssociativityProof join
+            joinIsCommutative : CommutativityProof join
           }
-  
-implementation (MeetSemiLattice x)
-               => JoinSemiLattice (Dual x)
-               where {
-                 join a b = MkDual $ meet (fromDual a) (fromDual b)
-                 joinIsIdempotent (MkDual a) = ?fixmeDual
-                 joinIsAssociative = ?fixme
-                 joinIsCommutative = ?fixme
-               }
+
+implementation (JoinSemiLattice t) => MeetSemiLattice (Dual t) where {
+  meet a b = MkDual $ join (fromDual a) (fromDual b)
+  meetIsIdempotent (MkDual a)
+    = dualInj $ joinIsIdempotent a
+  meetIsAssociative (MkDual a) (MkDual b) (MkDual c)
+    = dualInj $ joinIsAssociative a b c
+  meetIsCommutative (MkDual a) (MkDual b)
+    = dualInj $ joinIsCommutative a b
+}
+
+implementation (MeetSemiLattice t) => JoinSemiLattice (Dual t) where {
+  join a b = MkDual $ meet (fromDual a) (fromDual b)
+  joinIsIdempotent (MkDual a)
+    = dualInj $ meetIsIdempotent a
+  joinIsAssociative (MkDual a) (MkDual b) (MkDual c)
+    = dualInj $ meetIsAssociative a b c
+  joinIsCommutative (MkDual a) (MkDual b)
+    = dualInj $ meetIsCommutative a b
+}
 
 
 interface (MeetSemiLattice X)
           => BoundedMeetSemiLattice (X : Type)
           where {
             top : X
-            topIsUnital : UnitalityProof X meet top
+            topIsUnital : UnitalityProof meet top
           }
 
 interface (JoinSemiLattice X)
           => BoundedJoinSemiLattice (X : Type)
           where {
             bot : X
-            botIsUnital : UnitalityProof X join bot
+            botIsUnital : UnitalityProof join bot
           }
+
+implementation (BoundedMeetSemiLattice t) => BoundedJoinSemiLattice (Dual t)
+               where {
+                 bot = MkDual top
+                 botIsUnital (MkDual a) = let (p1, p2) = topIsUnital a
+                                          in (dualInj p1, dualInj p2)
+               }
 
 interface (MeetSemiLattice X, JoinSemiLattice X)
           => Lattice (X : Type)
